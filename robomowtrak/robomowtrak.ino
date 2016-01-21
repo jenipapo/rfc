@@ -103,33 +103,6 @@ unsigned long TimeOutSMSMenu;
 unsigned long taskCheckFW;
 
 
-//----------------------------------------------------------------------
-//!\brief	returns distance in meters between two positions, both specified
-//!\brief	as signed decimal-degrees latitude and longitude. Uses great-circle
-//!\brief	distance computation for hypothetical sphere of radius 6372795 meters.
-//!\brief	Because Earth is no exact sphere, rounding errors may be up to 0.5%.
-//!\param	float lat1, float long1, float lat2, float long2
-//!\return	meters (float)
-//---------------------------------------------------------------------- 
-float DistanceBetween(float lat1, float long1, float lat2, float long2){
-	// Courtesy of Maarten Lamers
-	float delta = radians(long1-long2);
-	float sdlong = sin(delta);
-	float cdlong = cos(delta);
-	lat1 = radians(lat1);
-	lat2 = radians(lat2);
-	float slat1 = sin(lat1);
-	float clat1 = cos(lat1);
-	float slat2 = sin(lat2);
-	float clat2 = cos(lat2);
-	delta = (clat1 * slat2) - (slat1 * clat2 * cdlong);
-	delta = sq(delta);
-	delta += sq(clat2 * sdlong);
-	delta = sqrt(delta);
-	float denom = (slat1 * slat2) + (clat1 * clat2 * cdlong);
-	delta = atan2(delta, denom);
-	return delta * 6372795;
-}
 
 //----------------------------------------------------------------------
 //!\brief	return position of the comma number 'num' in the char array 'str'
@@ -180,127 +153,6 @@ static float getIntNumber(const char *s){
 	rev=atoi(buf);
 	return rev; 
 }
-
-//----------------------------------------------------------------------
-//!\brief	Parse GPS NMEA buffer for extracting data
-//!\return  -
-//----------------------------------------------------------------------
-void parseGPGGA(const char* GPGGAstr){
-  /* Refer to http://www.gpsinformation.org/dale/nmea.htm#GGA
-   * Sample data: $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
-   * Where:
-   *  GGA          Global Positioning System Fix Data
-   *  123519       Fix taken at 12:35:19 UTC
-   *  4807.038,N   Latitude 48 deg 07.038' N
-   *  01131.000,E  Longitude 11 deg 31.000' E
-   *  1            Fix quality: 0 = invalid
-   *                            1 = GPS fix (SPS)
-   *                            2 = DGPS fix
-   *                            3 = PPS fix
-   *                            4 = Real Time Kinematic
-   *                            5 = Float RTK
-   *                            6 = estimated (dead reckoning) (2.3 feature)
-   *                            7 = Manual input mode
-   *                            8 = Simulation mode
-   *  08           Number of satellites being tracked
-   *  0.9          Horizontal dilution of position
-   *  545.4,M      Altitude, Meters, above mean sea level
-   *  46.9,M       Height of geoid (mean sea level) above WGS84
-   *                   ellipsoid
-   *  (empty field) time in seconds since last DGPS update
-   *  (empty field) DGPS station ID number
-   *  *47          the checksum data, always begins with *
-   */
-
-	if(GPGGAstr[0] == '$'){
-		int tmp;
-		tmp = getComma(1, GPGGAstr);
-		MyGPSPos.hour     = (GPGGAstr[tmp + 0] - '0') * 10 + (GPGGAstr[tmp + 1] - '0');
-		MyGPSPos.minute   = (GPGGAstr[tmp + 2] - '0') * 10 + (GPGGAstr[tmp + 3] - '0');
-		MyGPSPos.second    = (GPGGAstr[tmp + 4] - '0') * 10 + (GPGGAstr[tmp + 5] - '0');
-
-		//get time
-		sprintf(buff, "UTC time %02d:%02d:%02d", MyGPSPos.hour, MyGPSPos.minute, MyGPSPos.second);
-		Serial.print(buff);
-		//get lat/lon coordinates
-		float latitudetmp;
-		float longitudetmp;
-		tmp = getComma(2, GPGGAstr);
-		latitudetmp = getFloatNumber(&GPGGAstr[tmp]);
-		tmp = getComma(4, GPGGAstr);
-		longitudetmp = getFloatNumber(&GPGGAstr[tmp]);
-		// need to convert format
-		convertCoords(latitudetmp, longitudetmp, MyGPSPos.latitude, MyGPSPos.longitude);
-		//get lat/lon direction
-		tmp = getComma(3, GPGGAstr);
-		MyGPSPos.latitude_dir = (GPGGAstr[tmp]);
-		tmp = getComma(5, GPGGAstr);
-		MyGPSPos.longitude_dir = (GPGGAstr[tmp]);
-		
-		//sprintf(buff, "latitude = %10.4f-%c, longitude = %10.4f-%c", MyGPSPos.latitude, MyGPSPos.latitude_dir, MyGPSPos.longitude, MyGPSPos.longitude_dir);
-		//Serial.println(buff); 
-		
-		//get GPS fix quality
-		tmp = getComma(6, GPGGAstr);
-		MyGPSPos.fix = getIntNumber(&GPGGAstr[tmp]);    
-		sprintf(buff, "  -  GPS fix quality = %d", MyGPSPos.fix);
-		Serial.print(buff);   
-		//get satellites in view
-		tmp = getComma(7, GPGGAstr);
-		MyGPSPos.num = getIntNumber(&GPGGAstr[tmp]);    
-		sprintf(buff, "  -  %d satellites", MyGPSPos.num);
-		Serial.println(buff); 
-	}
-	else{
-		Serial.println("No GPS data"); 
-	}
-}
-
-//----------------------------------------------------------------------
-//!\brief	Convert GPGGA coordinates (degrees-mins-secs) to true decimal-degrees
-//!\return  -
-//----------------------------------------------------------------------
-void convertCoords(float latitude, float longitude, float &lat_return, float &lon_return){
-	int lat_deg_int = int(latitude/100);		//extract the first 2 chars to get the latitudinal degrees
-	int lon_deg_int = int(longitude/100);		//extract first 3 chars to get the longitudinal degrees
-    // must now take remainder/60
-    // this is to convert from degrees-mins-secs to decimal degrees
-    // so the coordinates are "google mappable"
-    float latitude_float = latitude - lat_deg_int * 100;		//remove the degrees part of the coordinates - so we are left with only minutes-seconds part of the coordinates
-    float longitude_float = longitude - lon_deg_int * 100;     
-    lat_return = lat_deg_int + latitude_float / 60 ;			//add back on the degrees part, so it is decimal degrees
-    lon_return = lon_deg_int + longitude_float / 60 ;
-}
-
-//----------------------------------------------------------------------
-//!\brief	Grab GPS position from serial
-//!\return  -
-//----------------------------------------------------------------------
-void GetGPSPos(void){
-	// For one second we parse GPS data and report some key values
-	if(MyFlag.taskGetGPS){
-		MyFlag.taskGetGPS = false;
-		Serial.println("--- LGPS loop ---"); 
-		LGPS.getData(&info);
-		//Serial.print((char*)info.GPGGA); 
-		parseGPGGA((const char*)info.GPGGA);
-				
-		//check fix 
-		//if GPS fix is OK
-		if ( MyGPSPos.fix == GPS || MyGPSPos.fix == DGPS || MyGPSPos.fix == PPS ){
-			//set a flag
-			MyFlag.fix3D = true;
-		}
-		else{
-			//reset flag 
-			MyFlag.fix3D = false;
-		}
-		sprintf(buff, "Current position is : https://www.google.com/maps?q=%2.6f%c,%3.6f%c", MyGPSPos.latitude, MyGPSPos.latitude_dir, MyGPSPos.longitude, MyGPSPos.longitude_dir);
-		Serial.println(buff);
-		Serial.println();
-	}
-}
-
 
 //----------------------------------------------------------------------
 //!\brief	Get analog voltage of DC input (can be an external battery)
@@ -382,33 +234,6 @@ void GetLiPoInfo(void){
 			sprintf(chargdir,"charging");		
 		sprintf(buff," is %s\r\n", chargdir );
 		Serial.println(buff);
-	}
-}
-
-//----------------------------------------------------------------------
-//!\brief	Do geofencing detection. if we are outside autorized area -> alarm!
-//!\return  -
-//----------------------------------------------------------------------
-void Geofencing(void){
-	//check if GPS fix is good
-	if (MyFlag.fix3D && MyFlag.taskTestGeof){
-		MyFlag.taskTestGeof = false;
-		Serial.println("-- Geofencing --"); 
-		//compute distance between actual position and reference position
-		float distance_base = DistanceBetween(MyParam.base_lat, MyParam.base_lon, MyGPSPos.latitude, MyGPSPos.longitude);
-		sprintf(buff, "distance BASE->Robot: %.1f m", distance_base);
-		Serial.println(buff);
-		
-		//check where we are
-		if(distance_base <= RADIUS){
-			Serial.println("Position is inside area");
-			MyFlag.PosOutiseArea = false;
-		}
-		else{
-			Serial.println("ALARM, outside AREA !!!!");
-			MyFlag.PosOutiseArea = true;
-		}
-		Serial.println();
 	}
 }
 
@@ -502,118 +327,6 @@ void ProcessChgNum(){
 	}
 }
 
-//----------------------------------------------------------------------
-//!\brief	Proceed to change coordinates of main area in EEPROM from sms command
-//!\brief	MySMS.message should contain : 49.791489,N,179.1077,E or 'Here'
-//!\return  -
-//----------------------------------------------------------------------
-void ProcessChgCoord(){
-
-	// check lengh before split
-	if( strlen (MySMS.message) <= 22 ){
-		double newlat, newlon;
-		char newlatdir, newlondir;
-		
-		// Read first field : could be a lat or 'here' word 
-		char* command = strtok(MySMS.message, ",");
-		if( strcmp(command, "Here") == 0 || strcmp(command, "HERE") == 0 || strcmp(command, "here") == 0){
-			// check if GPS fix is good
-			if (MyFlag.fix3D) {
-				// say it's ok
-				Serial.println(" Save actual position as area position.");
-				MyParam.base_lat = MyGPSPos.latitude;
-				MyParam.base_lat_dir = MyGPSPos.latitude_dir;
-				MyParam.base_lon = MyGPSPos.longitude;
-				MyParam.base_lon_dir = MyGPSPos.longitude_dir;
-				// prepare SMS to confirm data are OK
-				sprintf(buff, " New coord. saved : %2.6f,%c,%3.6f,%c", MyParam.base_lat, MyParam.base_lat_dir, MyParam.base_lon, MyParam.base_lon_dir); 
-				Serial.println(buff);
-				// send SMS
-				SendSMS(MySMS.incomingnumber, buff);	
-				// change state machine to Main_menu
-				MySMS.menupos = SM_MENU_MAIN;			
-				// Save change in EEPROM
-				EEPROM_writeAnything(0, MyParam);
-				Serial.println(" New coord. saved in EEPROM");
-			}
-			else{
-				// say it's not OK because GPS is not fixed
-				// prepare SMS to confirm data are OK
-				sprintf(buff, " GPS not fixed, can't save position. Retry later"); 
-				Serial.println(buff);
-				// send SMS
-				SendSMS(MySMS.incomingnumber, buff);	
-				// change state machine to Main_menu
-				MySMS.menupos = SM_MENU_MAIN;
-			}
-		}
-		else{
-			// Command contain lat (string)
-			//convert to lat float
-			newlat = atof(command);
-			sprintf(buff," lat : %2.6f",newlat);
-			Serial.println(buff);
-			
-			// Read next field : lat direction
-			command = strtok(NULL, ",");
-			//copy only the dir to char
-			newlatdir = command[0];
-			sprintf(buff," lat_dir : %c",newlatdir);
-			Serial.println(buff);
-			
-			// Find the next field : lon
-			command = strtok (NULL, ",");
-			//convert to lon float
-			newlon = atof(command);
-			sprintf(buff," lon : %3.6f",newlon);
-			Serial.println(buff);		
-
-			// Read next field : lon direction
-			command = strtok(NULL, ",");
-			//copy only the dir to char
-			newlondir = command[0];
-			sprintf(buff," lat_dir : %c",newlondir);
-			Serial.println(buff);
-			
-			// proceed to a global check
-			if( (newlatdir == 'N' || newlatdir == 'n' || newlatdir == 'S' || newlatdir == 's') && (newlondir == 'E' || newlondir == 'e' || newlondir == 'W' || newlondir == 'w') && ( newlat >= 0.0 && newlat < 90.0 ) && ( newlon >= 0.0 && newlat < 180.0) ){
-				// say it's ok
-				Serial.println(" Data checked !");
-				// save all data in structure
-				MyParam.base_lat = newlat;
-				MyParam.base_lat_dir = newlatdir;
-				MyParam.base_lon = newlon;
-				MyParam.base_lon_dir = newlondir;
-				//prepare SMS to confirm data are OK
-				sprintf(buff, " New coord. saved : %2.6f,%c,%3.6f,%c", newlat, newlatdir, newlon, newlondir); 
-				Serial.println(buff);
-				//send SMS
-				SendSMS(MySMS.incomingnumber, buff);	
-				//change state machine to Main_menu
-				MySMS.menupos = SM_MENU_MAIN;			
-				//Save change in EEPROM
-				EEPROM_writeAnything(0, MyParam);
-				Serial.println(" New coord. saved in EEPROM");
-			}
-			else{
-				sprintf(buff, " Data error : %f,%c,%f,%c", newlat, newlatdir, newlon, newlondir); 
-				Serial.println(buff);
-				//send SMS
-				SendSMS(MySMS.incomingnumber, buff);	
-				//change state machine to Main_menu
-				MySMS.menupos = SM_MENU_MAIN;			
-			}
-		}
-	}
-	else{
-		sprintf(buff, " Error in size parameters : %s.", MySMS.message); 
-		Serial.println(buff);
-		//send SMS
-		SendSMS(MySMS.incomingnumber, buff);	
-		//change state machine to Main_menu
-		MySMS.menupos = SM_MENU_MAIN;
-	}
-}
 
 //----------------------------------------------------------------------
 //!\brief	Proceed to change secret code in EEPROM from sms command
@@ -666,51 +379,6 @@ void ProcessChgSecret(){
 	}
 }
 
-//----------------------------------------------------------------------
-//!\brief	Proceed to radius of geofencing
-//!\brief	MySMS.message should contain radius in meter
-//!\return  -
-//----------------------------------------------------------------------
-void ProcessChgRadius(){
-	//check lengh before split
-	if( strlen(MySMS.message) <= 5 ){
-		// convert SMS to integer
-		unsigned int radius_sms = atoi(MySMS.message);
-		sprintf(buff, "SMS content as meter : %d\n", radius_sms);
-		Serial.println(buff);
-		
-		//compare old number with the one stored in EEPROM
-		if( radius_sms > 1 and radius_sms <= 10000 ){
-			// value is OK , we can store it in EEPROM
-			MyParam.radius = radius_sms;
-			//Save change in EEPROM
-			EEPROM_writeAnything(0, MyParam);
-			Serial.println("New value saved in EEPROM");
-			sprintf(buff, "New radius saved : %d m", MyParam.radius); 
-			Serial.println(buff);
-			//send SMS
-			SendSMS(MySMS.incomingnumber, buff);	
-			//change state machine to Main_menu
-			MySMS.menupos = SM_MENU_MAIN;			
-		}
-		else{
-			sprintf(buff, "Error, value is outside rangee : %d m", radius_sms); 
-			Serial.println(buff);
-			//send SMS
-			SendSMS(MySMS.incomingnumber, buff);	
-			//change state machine to Main_menu
-			MySMS.menupos = SM_MENU_MAIN;			
-		}
-	}
-	else{
-		sprintf(buff, "Error in size parameters (%d): %s.", strlen(MySMS.message), MySMS.message); 
-		Serial.println(buff);
-		//send SMS
-		SendSMS(MySMS.incomingnumber, buff);	
-		//change state machine to Main_menu
-		MySMS.menupos = SM_MENU_MAIN;
-	}
-}
 
 //----------------------------------------------------------------------
 //!\brief	Proceed to change voltage of low power trigger alarm
@@ -1147,6 +815,7 @@ bool SendSMS( const char *phonenumber, const char *message ){
 	}
 	return ret;
 }
+
 //----------------------------------------------------------------------
 //!\brief	Manage alert when occurs
 //!\return  -
@@ -1311,6 +980,7 @@ void AlertMng(void){
 		}
 	}	
 }
+
 //----------------------------------------------------------------------
 //!\brief	Load params from EEPROM
 //----------------------------------------------------------------------
@@ -1555,14 +1225,12 @@ void setup() {
 //----------------------------------------------------------------------
 void loop() {
 	Scheduler();
-	GetGPSPos();
 	GetLiPoInfo();
 	GetAnalogRead();
 	GetDigitalInput();
 	CheckSMSrecept();
 	MenuSMS();
 	// SendGPS2Wifi();
-	Geofencing();
 	AlertMng();
 }
 
