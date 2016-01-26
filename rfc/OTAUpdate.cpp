@@ -198,10 +198,10 @@ boolean OTAUpdateClass::downloadFile(const char* name) {
 	c.print(buff);
 	//c.printf("GET /%s/%s", this->path, &name[4]);
 	c.println(" HTTP/1.1");
-	c.print("Host: ");
-	c.println(this->host);
-	c.println("Connection: close");
-	c.println();
+    c.print("Host: ");
+    c.println(this->host);
+    c.println("Connection: close");
+    c.println();
 
 	// save the result
 	max_millis = millis() + 10000;
@@ -269,7 +269,7 @@ boolean OTAUpdateClass::downloadFile(const char* name) {
 					delay(100);
 				}
 			}
-		}		
+		}
 	}
 	c.stop();
 	ota.close();
