@@ -729,14 +729,14 @@ void MenuSMS(void){
 				// reload timer to avoid auto-logout
 				TimeOutSMSMenu = millis();
 				Serial.println("Proceed to change coordinates");
-				ProcessChgCoord();
+				//ProcessChgCoord();
 				break;	
 				
 			case SM_CHG_RADIUS:
 				// reload timer to avoid auto-logout
 				TimeOutSMSMenu = millis();
 				Serial.println("Proceed to change geofencing radius");
-				ProcessChgRadius();
+				//ProcessChgRadius();
 				break;
 				
 			case SM_CHG_SECRET:
@@ -1061,15 +1061,15 @@ void PrintMyParam() {
 //----------------------------------------------------------------------
 void Scheduler() {
 
-	if( (millis() - taskGetGPS) > PERIOD_GET_GPS){
-		taskGetGPS = millis();
-		MyFlag.taskGetGPS = true;	
-	}
+	// if( (millis() - taskGetGPS) > PERIOD_GET_GPS){
+		// taskGetGPS = millis();
+		// MyFlag.taskGetGPS = true;	
+	// }
 	
-	if( (millis() - taskTestGeof) > PERIOD_TEST_GEOFENCING){
-		taskTestGeof = millis();
-		MyFlag.taskTestGeof = true;
-	}
+	// if( (millis() - taskTestGeof) > PERIOD_TEST_GEOFENCING){
+		// taskTestGeof = millis();
+		// MyFlag.taskTestGeof = true;
+	// }
 	
 	if( (millis() - taskGetLiPo) > PERIOD_LIPO_INFO){
 		taskGetLiPo = millis();
@@ -1081,10 +1081,10 @@ void Scheduler() {
 		MyFlag.taskCheckSMS = true;
 	}
 	
-	if( (millis() - taskCheckFlood) > PERIOD_CHECK_FLOOD){
-		taskCheckFlood = millis();
-		MyFlag.taskCheckFlood = true;
-	}	
+	// if( (millis() - taskCheckFlood) > PERIOD_CHECK_FLOOD){
+		// taskCheckFlood = millis();
+		// MyFlag.taskCheckFlood = true;
+	// }	
 	
 	if( (millis() - taskStatusSMS) > PERIODIC_STATUS_SMS){
 		taskStatusSMS = millis();
@@ -1134,7 +1134,7 @@ void setup() {
 	MyGPSPos.fix = Error;
 	
 	// LTask will help you out with locking the mutex so you can access the global data
-    LTask.remoteCall(createThread1, NULL);
+    //LTask.remoteCall(createThread1, NULL);
 	LTask.remoteCall(createThreadSerialMenu, NULL);
 	Serial.println("Launch threads.");
 	
@@ -1166,8 +1166,8 @@ void setup() {
 	MySMS.menupos = SM_LOGIN;
 	
 	// for scheduler
-	taskGetGPS = millis();
-	taskTestGeof = millis();
+	//taskGetGPS = millis();
+	//taskTestGeof = millis();
 	taskGetLiPo = millis();
 	taskGetAnalog = millis();
 	taskCheckSMS = millis();
@@ -1201,7 +1201,7 @@ void loop() {
 	Scheduler();
 	GetLiPoInfo();
 	GetAnalogRead();
-	GetDigitalInput();
+	//GetDigitalInput();
 	CheckSMSrecept();
 	MenuSMS();
 	// SendGPS2Wifi();
@@ -1211,12 +1211,12 @@ void loop() {
 //----------------------------------------------------------------------
 //!\brief           THREAD DECLARATION
 //----------------------------------------------------------------------
-boolean createThread1(void* userdata) {
-	// The priority can be 1 - 255 and default priority are 0
-	// the arduino priority are 245
-	vm_thread_create(thread_ledgps, NULL, 255);
-    return true;
-}
+// boolean createThread1(void* userdata) {
+	// // The priority can be 1 - 255 and default priority are 0
+	// // the arduino priority are 245
+	// vm_thread_create(thread_ledgps, NULL, 255);
+    // return true;
+// }
 
 boolean createThreadSerialMenu(void* userdata) {
 	// The priority can be 1 - 255 and default priority are 0
