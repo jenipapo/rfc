@@ -1,18 +1,16 @@
 //--------------------------------------------------
 //! \file		robomowtrak.ino
-//! \brief		GPS TRACKER
-//! \brief		Use GPS for localisation.
 //! \brief		Full configurable by SMS.
 //! \brief		SMS alert only.
 //! \brief		Read voltage input and can set an alarm on low power.
 //! \brief		Monitor LiPo cell voltage and can set an alarm on low power.
-//! \brief		Flood sensor interface (GPIO) or other sensor.
 //! \brief		Serial message are for debug purpose only.
 //! \brief		Over The Air by GPRS sketche update
 //! \brief		NOT USED YET : Wifi for tracking/logging position while in my garden
 //! \date		2015-May
 //! \author		minbiocabanon
 //--------------------------------------------------
+
 
 //--------------------------------------------------
 //! some notes here :
@@ -38,19 +36,16 @@
 
 #include "EEPROMAnything.h"
 #include "myprivatedata.h"
-#include "robomowtrak.h"
+#include "rfc.h"
 
 //--------------------------------------------------
 //! \version	
 //--------------------------------------------------
 #define	FWVERSION	3
 
-#define	PERIOD_GET_GPS			5000		// 5 sec. , interval between 2 GPS positions, in milliseconds
-#define	PERIOD_TEST_GEOFENCING	120000		// 2 min. , interval between 2 geofencing check, in milliseconds (can send an SMS alert if we are outside area)
 #define PERIOD_LIPO_INFO		120000		// 2 min. ,interval between 2 battery level measurement, in milliseconds
 #define PERIOD_READ_ANALOG		120000		// 2 min. ,interval between 2 analog input read (external supply), in milliseconds
 #define PERIOD_CHECK_ANALOG_LEVEL 1200000	// 20 min. , interval between 2 analog level check (can send an SMS alert if level are low)
-#define PERIOD_CHECK_FLOOD		600000		// 10 min. ,interval between 2 flood sensor check (can send an SMS alert if water is detected)
 #define PERIOD_CHECK_SMS		1000		// 1 sec., interval between 2 SMS check, in milliseconds
 #define TIMEOUT_SMS_MENU		300000		// 5 min., when timeout, SMS menu return to login (user should send password again to log), in milliseconds
 
@@ -83,21 +78,16 @@
 // Do not use value < 33% because linkitone will not give you another value until 0% ...
 #define LIPO_LEVEL_TRIG	33	// in % , values available 33 - 66 (0 and exlucded logically)
 
-// GPS
-gpsSentenceInfoStruct info;
-
 // Median computation
 RunningMedian samples = RunningMedian(NB_SAMPLE_ANALOG);
 
 // Miscalleneous 
 char buff[512];
-unsigned long taskGetGPS;
 unsigned long taskTestGeof;
 unsigned long taskGetLiPo;
 unsigned long taskGetAnalog;
 unsigned long taskCheckInputVoltage;
 unsigned long taskCheckSMS;
-unsigned long taskCheckFlood;
 unsigned long taskStatusSMS;
 unsigned long TimeOutSMSMenu;
 unsigned long taskCheckFW;
@@ -120,6 +110,7 @@ static unsigned char getComma(unsigned char num,const char *str){
 	return 0; 
 }
 
+
 //----------------------------------------------------------------------
 //!\brief	convert char buffer to float
 //!\return  float
@@ -137,6 +128,7 @@ static float getFloatNumber(const char *s){
 	return rev; 
 }
 
+
 //----------------------------------------------------------------------
 //!\brief	convert char buffer to int
 //!\return  float
@@ -153,6 +145,7 @@ static float getIntNumber(const char *s){
 	rev=atoi(buf);
 	return rev; 
 }
+
 
 //----------------------------------------------------------------------
 //!\brief	Get analog voltage of DC input (can be an external battery)
@@ -188,30 +181,6 @@ void GetAnalogRead(void){
 	}	
 }
 
-//----------------------------------------------------------------------
-//!\brief	Read Digital input : check if flood sensor detects some water
-//!\return  -
-//----------------------------------------------------------------------
-void GetDigitalInput(void){
-	// if it's time to get digital input from flood sensor
-	if(MyFlag.taskCheckFlood){
-		Serial.println("-- Digital input read --");
-		MyFlag.taskCheckFlood = false;
-		//read digital input
-		MyGpio.FloodSensor = digitalRead(FLOODSENSOR);
-		sprintf(buff," Digital input = %d\r\n", MyGpio.FloodSensor );
-		Serial.print(buff);
-		
-		// if input is true, we are diviiiiiing !
-		if ( MyGpio.FloodSensor == FLOODSENSOR_ACTIVE ){
-			//prepare SMS to warn user
-			sprintf(buff, "Alert! flood sensor has detect water.\r\n Input level is %d.", MyGpio.FloodSensor); 
-			Serial.println(buff);
-			//send SMS
-			SendSMS(MySMS.incomingnumber, buff);
-		}
-	}
-}
 
 //----------------------------------------------------------------------
 //!\brief	Grab LiPo battery level and status
@@ -236,6 +205,7 @@ void GetLiPoInfo(void){
 		Serial.println(buff);
 	}
 }
+
 
 //----------------------------------------------------------------------
 //!\brief	Verify if SMS is incoming
@@ -426,6 +396,7 @@ void ProcessLowPowTrig(){
 	}
 }
 
+
 //----------------------------------------------------------------------
 //!\brief	Proceed to restore all factory settings 
 //!\brief	MySMS.message should contain : y or n (Y or N)
@@ -472,6 +443,7 @@ void ProcessRestoreDefault(){
 	//change state machine to Main_menu
 	MySMS.menupos = SM_MENU_MAIN;	
 }
+
 
 //----------------------------------------------------------------------
 //!\brief	Does action selected by user in the main menu
@@ -1140,6 +1112,7 @@ void Scheduler() {
 	}
 }
 
+
 //----------------------------------------------------------------------
 //!\brief           SETUP()
 //----------------------------------------------------------------------
@@ -1220,6 +1193,7 @@ void setup() {
 	// SendSMS(MyParam.myphonenumber, buff);	
 }
 
+
 //----------------------------------------------------------------------
 //!\brief           LOOP()
 //----------------------------------------------------------------------
@@ -1251,48 +1225,48 @@ boolean createThreadSerialMenu(void* userdata) {
     return true;
 }
 
-//----------------------------------------------------------------------
-//!\brief           THREAD LED GPS
-//---------------------------------------------------------------------- 
-VMINT32 thread_ledgps(VM_THREAD_HANDLE thread_handle, void* user_data){
-    for (;;){
-		switch(MyGPSPos.fix){
-			case Invalid:
-				// blink led as pulse
-				digitalWrite(LEDGPS, HIGH);
-				delay(500);
-				digitalWrite(LEDGPS, LOW);
-				delay(500);
-				break;
-			case GPS:
-			case DGPS:
-			case PPS:
-			case RTK:
-			case FloatRTK:
-			case DR:
-			case Manual:
-			case Simulation:
-				// blink led as slow pulse
-				digitalWrite(LEDGPS, HIGH);
-				delay(150);
-				digitalWrite(LEDGPS, LOW);
-				delay(2850);
-				break;
-			case Error:
-				// Fast blinking led
-				digitalWrite(LEDGPS, HIGH);
-				delay(100);
-				digitalWrite(LEDGPS, LOW);
-				delay(100);
-				break;
-		}
-		//DEBUG
-		// sprintf(buff, "MyGPSPos.fix = %d", MyGPSPos.fix);
-		// Serial.println(buff);
-		// delay(1000);
-	}
-    return 0;
-}
+////----------------------------------------------------------------------
+////!\brief           THREAD LED GPS
+////---------------------------------------------------------------------- 
+//VMINT32 thread_ledgps(VM_THREAD_HANDLE thread_handle, void* user_data){
+    //for (;;){
+		//switch(MyGPSPos.fix){
+			//case Invalid:
+				//// blink led as pulse
+				//digitalWrite(LEDGPS, HIGH);
+				//delay(500);
+				//digitalWrite(LEDGPS, LOW);
+				//delay(500);
+				//break;
+			//case GPS:
+			//case DGPS:
+			//case PPS:
+			//case RTK:
+			//case FloatRTK:
+			//case DR:
+			//case Manual:
+			//case Simulation:
+				//// blink led as slow pulse
+				//digitalWrite(LEDGPS, HIGH);
+				//delay(150);
+				//digitalWrite(LEDGPS, LOW);
+				//delay(2850);
+				//break;
+			//case Error:
+				//// Fast blinking led
+				//digitalWrite(LEDGPS, HIGH);
+				//delay(100);
+				//digitalWrite(LEDGPS, LOW);
+				//delay(100);
+				//break;
+		//}
+		////DEBUG
+		//// sprintf(buff, "MyGPSPos.fix = %d", MyGPSPos.fix);
+		//// Serial.println(buff);
+		//// delay(1000);
+	//}
+    //return 0;
+//}
 
 //----------------------------------------------------------------------
 //!\brief           THREAD THAT MANAGE SERIAL MENU
@@ -1322,6 +1296,6 @@ VMINT32 thread_serialmenu(VM_THREAD_HANDLE thread_handle, void* user_data){
 			MyFlag.SMSReceived = true;
 		}
 		delay(500);		
-    }
-    return 0;
+  }
+  return 0;
 }
