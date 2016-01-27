@@ -46,6 +46,8 @@
 
 // Led gpio definition
 #define LEDALARM  				12
+#define LEDSTATUS  				0
+#define RELAY	  				1
 
 // Median computation
 RunningMedian samples_A0 = RunningMedian(NB_SAMPLE_ANALOG);
@@ -487,7 +489,24 @@ void ProcessMenuMain(void){
 			// Force to return to SM_LOGIN state -> need to receive secret code 
 			MySMS.menupos = SM_LOGIN;
 			break;	
-			
+		case CMD_CHFG_ON:
+			//prepare SMS content
+			sprintf(buff, "Boiler is ON"); 
+			Serial.println(buff);
+			//send SMS
+			SendSMS(MySMS.incomingnumber, buff);		
+			// power ON relay -> do you feel the heat ?
+			digitalWrite(RELAY, LOW);
+			break;
+		case CMD_CHFG_OFF:
+			//prepare SMS content
+			sprintf(buff, "Boiler is OFF"); 
+			Serial.println(buff);
+			//send SMS
+			SendSMS(MySMS.incomingnumber, buff);			
+			// power OFF relay -> cold is coming ...
+			digitalWrite(RELAY, HIGH);
+			break;
 		case CMD_PARAMS:	//go to sub menu params
 			sprintf(buff, TXT_PARAMS_MENU); 
 			Serial.println(buff);
@@ -914,12 +933,17 @@ void setup() {
 	
 	// set I/O direction
 	pinMode(LEDALARM, OUTPUT);
+	pinMode(LEDSTATUS, OUTPUT);
 	pinMode(FLOODSENSOR, INPUT);
+	pinMode(RELAY, OUTPUT);
+	// default state for relay
+	digitalWrite(RELAY, HIGH);
 	
 	delay(5000);
-	Serial.println("Pepette.com.Box "); 
+	Serial.println("RFC Project - No longer get cold at home ! "); 
 	
 	// LTask will help you out with locking the mutex so you can access the global data
+	LTask.remoteCall(createThreadled, NULL);
 	LTask.remoteCall(createThreadSerialMenu, NULL);
 	Serial.println("Launch threads.");
 	
@@ -933,7 +957,7 @@ void setup() {
 	
 	if(LSMS.ready()){
 		Serial.println("SIM ready.");	
-		
+		MyFlag.rfcstatus = RFCSTATUS_READY;
 		Serial.println("Deleting SMS received ...");
 		//delete ALL sms received while powered off
 		while(LSMS.available()){
@@ -947,6 +971,7 @@ void setup() {
 	}
 	else{
 		Serial.println("No SIM Detected.");	
+		MyFlag.rfcstatus = RFCSTATUS_ERROR;
 	}
 	
 
@@ -997,12 +1022,41 @@ void loop() {
 //----------------------------------------------------------------------
 //!\brief           THREAD DECLARATION
 //----------------------------------------------------------------------
-
+boolean createThreadled(void* userdata) {
+        // The priority can be 1 - 255 and default priority are 0
+        // the arduino priority are 245
+        vm_thread_create(thread_led, NULL, 255);
+    return true;
+}
 boolean createThreadSerialMenu(void* userdata) {
 	// The priority can be 1 - 255 and default priority are 0
 	// the arduino priority are 245
 	vm_thread_create(thread_serialmenu, NULL, 255);
     return true;
+}
+//----------------------------------------------------------------------
+//!\brief           THREAD LED (for test purpose)
+//---------------------------------------------------------------------- 
+VMINT32 thread_led(VM_THREAD_HANDLE thread_handle, void* user_data){
+   for (;;){
+		switch(MyFlag.rfcstatus){
+			case RFCSTATUS_READY:
+				// blink led as slow pulse
+				digitalWrite(LEDSTATUS, HIGH);
+				delay(150);
+				digitalWrite(LEDSTATUS, LOW);
+				delay(2850);
+				break;
+			case RFCSTATUS_ERROR:
+				// Fast blinking led
+				digitalWrite(LEDSTATUS, HIGH);
+				delay(100);
+				digitalWrite(LEDSTATUS, LOW);
+				delay(100);
+				break;
+		}
+	}
+    return 0;
 }
 
 //----------------------------------------------------------------------
@@ -1010,7 +1064,6 @@ boolean createThreadSerialMenu(void* userdata) {
 //!\brief			Read serial console to menu access
 //---------------------------------------------------------------------- 
 VMINT32 thread_serialmenu(VM_THREAD_HANDLE thread_handle, void* user_data){
-    
 	char buffth[255];
 	String stSerial;
 	for (;;){

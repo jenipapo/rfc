@@ -71,6 +71,7 @@ struct SMS {
 	}MySMS;
 	
 struct FlagReg {
+	char rfcstatus;		// status from rfcstatus enum -> change status led
 	bool taskGetLiPo;	// flag to indicate that we have to get battery level and charging status
 	bool taskGetAnalog;	// flag to indicate that we have to read analog input of external supply
 	bool taskCheckSMS;	// flag to indicate when check SMS
@@ -81,6 +82,11 @@ struct FlagReg {
 	bool ForceFWUpdate; // flag to indicate that a manual force update is asked by SMS		
 	}MyFlag;
 
+enum rfcstatus{
+	RFCSTATUS_ERROR,		// 0	SIM Error or rfc not ready
+	RFCSTATUS_READY			// 1
+	};	
+	
 enum SMSMENU{
 	SM_NOPE,		//0
 	SM_LOGIN,		//1
