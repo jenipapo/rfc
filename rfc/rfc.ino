@@ -496,7 +496,7 @@ void ProcessMenuMain(void){
 			//send SMS
 			SendSMS(MySMS.incomingnumber, buff);		
 			// power ON relay -> do you feel the heat ?
-			digitalWrite(RELAY, LOW);
+			digitalWrite(RELAY, HIGH);
 			break;
 		case CMD_CHFG_OFF:
 			//prepare SMS content
@@ -505,7 +505,7 @@ void ProcessMenuMain(void){
 			//send SMS
 			SendSMS(MySMS.incomingnumber, buff);			
 			// power OFF relay -> cold is coming ...
-			digitalWrite(RELAY, HIGH);
+			digitalWrite(RELAY, LOW);
 			break;
 		case CMD_PARAMS:	//go to sub menu params
 			sprintf(buff, TXT_PARAMS_MENU); 
